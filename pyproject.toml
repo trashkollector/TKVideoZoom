@@ -1,7 +1,7 @@
 [project]
 name = "ComfyUI-TKVideoZoom"
 description = "Various Zoom/Slide effects for Video"
-version = "1.01"
+version = "1.02"
 license = { file = "LICENSE" }
 
 [project.urls]
