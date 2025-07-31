@@ -1,7 +1,7 @@
 # TKVideoZoom
 Video Zoom Custom node for ComfyUI
 
-Take a video and zoom effect.
+Load a video and create zoom effect within Comfy.
 
 This node supports
 ZOOM IN, ZOOM OUT, SLIDE, and WOBBLE
