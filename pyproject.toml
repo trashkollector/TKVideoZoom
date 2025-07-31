@@ -1,0 +1,13 @@
+[project]
+name = "ComfyUI-TKVideoZoom"
+description = "Various Zoom/Slide effects for Video"
+version = "1.0"
+license = { file = "LICENSE" }
+
+[project.urls]
+Repository = "https://github.com/trashkollector/TKVideoZoom"
+
+[tool.comfy]
+PublisherId = "trashkollector"
+DisplayName = "ComfyUI-TKVideoZoom"
+Icon = ""
