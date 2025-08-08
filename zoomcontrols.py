@@ -28,6 +28,7 @@ class TKVideoZoom:
                 "movement_type": (["zoom in", "zoom out","wobble","slide"],),
                 "up_dn": (["top", "bottom","center"],),
                 "left_right": (["left", "right","center"],),
+                "visual_effect": (["normal", "grayscale","sepia"],),
 
             },
         }
@@ -48,11 +49,15 @@ class TKVideoZoom:
     # To represent a video, NumPy extends this concept by adding an extra dimension for the frames.
     #    This results in a 4D array with the shape (frames, height, width, channels).
     
-    def tkvideozoom(self, image, audio, frame_count, up_dn, left_right, movement_speed, movement_type):
+    def tkvideozoom(self, image, audio, frame_count, up_dn, left_right, movement_speed, movement_type, visual_effect):
         tensor_shape = image.shape
         height = tensor_shape[1]
         width = tensor_shape[2]
         
+        # Generate a random waveform function along the y-axis - used for wobble
+        y_trans = self.generate_translation(frame_count, 16, tuple([0.5, 2.5]), tuple([5.0,10.0]))
+        x_trans = self.generate_translation(frame_count, 16, tuple([0.0, 0.8]), tuple([1.0,5.0]))
+              
         video_numpy = (image.numpy() * 255).astype(np.uint8)  #convert video
    
         speed=1.0
@@ -79,62 +84,80 @@ class TKVideoZoom:
             factor = 2.0
             
         i=0
-        nW = width
-        nH = height
+        zoomW = width
+        zoomH = height
         frames=[]
         slideX=0
         slideY=0
         xOff=0
+        yOff=0
+     
+        print("Applying TK Effect")
      
         for frame in video_numpy: 
             if (i >= frame_count-1) :
                 break
-            print("frame "+str(i))
             
-            nW = int(width * factor)
-            nH = int(height * factor)
+            zoomW = int(width * factor)
+            zoomH = int(height * factor)
 
             # width, height
-            zoomFrame = cv2.resize(frame, (nW, nH), interpolation=cv2.INTER_AREA)
+            zoomFrame = cv2.resize(frame, (zoomW, zoomH), interpolation=cv2.INTER_AREA)
             
           
-            diffH = int((nH - height)/2)
-            diffW = int((nW - width)/2)
+            diffH = int((zoomH - height)/2)
+            diffW = int((zoomW - width)/2)
             
             if up_dn == "top" :
                 diffH =0
             elif up_dn == "bottom" :
-                diffH = nH - height
+                diffH = zoomH - height
                 
                 
             if left_right == "left" :
                 diffW =0   
             elif left_right == "right" :
-                diffW = nW - width  
+                diffW = zoomW - width  
             
             # only side to side
             if (movement_type == "slide") :
                 if (left_right == "left") or (left_right=="center")  :
                     slideX = -1
                     slideY = 0
-                    diffW = nW - width                    
+                    diffW = zoomW - width                    
                 elif left_right == "right" :
                     slideX = 1
                     slideY =0
                     diffW = 0 
+                          
+                xTemp =  diffW + int((i * slideX) * speed) 
+                if (xTemp>0) and (xTemp + width < zoomW) :
+                   xOff = xTemp
+                   
+            elif (movement_type == "wobble") :
+                xTemp =  diffW + int( x_trans[i] * speed)
+                if (xTemp>0) and (xTemp + width < zoomW ) :
+                   xOff = xTemp
+                yTemp =  diffH + int( y_trans[i] * speed) 
+                if (yTemp>0) and (yTemp + height < zoomH) :
+                   yOff = yTemp
+               
 
-
-                              
-            xTemp =  diffW + int((i * slideX) * speed) 
-            if (xTemp>0) and (xTemp + width < nW) :
-               xOff = xTemp
-            
             # start y, end y, start x , end x --- CROP
             if (movement_type == "slide") :
                 cropImg = zoomFrame[ diffH:height+diffH,    xOff:width+xOff :]
             # all other movments    
+            elif (movement_type=="wobble") :
+                cropImg = zoomFrame[ yOff:height+yOff,    xOff:width+xOff :]
             else :
                 cropImg = zoomFrame[ diffH:height+diffH,   diffW:width+diffW, :]
+                
+                
+            if (visual_effect == "grayscale") :
+                cropImg = np.array( self.grayscale(cropImg))
+            elif (visual_effect =="sepia") :
+                cropImg = np.array( self.sepia(cropImg))
+
                 
             frame = cropImg
             frames.append(frame)
@@ -149,16 +172,12 @@ class TKVideoZoom:
                 if (factor <= 1.0) :
                     factor = 1.0
             elif  (movement_type == "wobble") :
-                if increment:
-                    factor = factor + (0.001)
-                else :
-                    factor = factor - (0.001)
-                if (increment and factor > 1.109) :
-                    increment = False
-                elif (not increment and factor <= 1.001) :
-                    increment = True
+                factor = 1.3
             elif (movement_type =="slide") :
-                factor = 2.0   #  static always
+                if (speed=="slow") or (speed =="very slow") :
+                    factor = 1.3
+                else :
+                    factor = 1.7   #  static always
                     
             i = i+1
             
@@ -168,13 +187,92 @@ class TKVideoZoom:
         numpy_array = np.array(frames)
         theTensor = torch.from_numpy(numpy_array)
         theTensor = theTensor.float()  / 255.0
+        
         print(theTensor.shape)
             
         return (theTensor,audio)
         
         
-           
+    def generate_translation(
+        self,
+        n_frames: int, 
+        fps: float, 
+        amplitudes: tuple[float, float],
+        frequencies: tuple[float, float]
+    ) -> list:
+        """
+        Generate a list of translation values to create a hand shaking effect along one 
+        axis in an 80-second video.
 
+        Parameters:
+            n_frames (int): The total number of frames in the video.
+            fps (float): Frames per second of the video.
+            amplitudes (tuple[float, float]): The amplitudes of the sinusoidal waves 
+                                              along y-axis.
+            frequencies (tuple[float, float]): The frequencies of the sinusoidal waves 
+                                               along the x-axis.
+
+        Returns:
+            list: A list of translation values for each frame to create the hand shaking
+                  effect.
+        """
+        
+
+        num_points = 2000
+        num_waves = np.random.randint(30, 40)
+        amplitude_min, amplitude_max = amplitudes
+        frequence_min, frequence_max = frequencies
+        
+        x = np.linspace(0, 10, num_points)
+        y = np.zeros_like(x)
+        
+        for _ in range(num_waves):
+            frequency = np.random.uniform(frequence_min, frequence_max)
+            amplitude = np.random.uniform(amplitude_min, amplitude_max)
+            phase_shift = np.random.uniform(0, 2*np.pi)
+            y += amplitude * np.sin(2*np.pi*frequency*x + phase_shift)
+
+        duration = n_frames / fps
+        fixed = int(num_points * duration / 80)
+
+        x_fixed, y_fixed = x[:fixed], y[:fixed]
+
+        x_interpolated = np.linspace(0, max(x_fixed), n_frames)
+        y_interpolated = np.interp(x_interpolated, x_fixed, y_fixed)
+
+              
+        return y_interpolated    
+
+    
+    def sepia(self, npImg):
+
+        filt = cv2.transform( npImg, np.matrix([[ 0.393, 0.769, 0.189],
+                                              [ 0.349, 0.686, 0.168],
+                                              [ 0.272, 0.534, 0.131]
+        ]) )
+
+        # Check wich entries have a value greather than 255 and set it to 255
+        filt[np.where(filt>255)] = 255
+
+        # Create an image from the array
+        return filt
+            
+        
+    def grayscale(self, src_image):
+        gray = cv2.cvtColor(src_image, cv2.COLOR_RGB2GRAY)
+        normalized_gray = np.array(gray, np.float32)/255
+        #solid color
+        sepia = np.ones(src_image.shape)
+        sepia[:,:,0] *= 200 #B
+        sepia[:,:,1] *= 200 #G
+        sepia[:,:,2] *= 200 #R
+        #hadamard
+        sepia[:,:,0] *= normalized_gray #B
+        sepia[:,:,1] *= normalized_gray #G
+        sepia[:,:,2] *= normalized_gray #R
+        return np.array(sepia, np.uint8)        
+        
+        
     """
         The node will always be re executed if any of the inputs change but
         this method can be used to force the node to execute again even when the inputs don't change.
@@ -183,6 +281,11 @@ class TKVideoZoom:
         This method is used in the core repo for the LoadImage node where they return the image hash as a string, if the image hash
         changes between executions the LoadImage node is executed again.
     """
+    
+    
+    
+    
+    
     #@classmethod
     #def IS_CHANGED(s, image, string_field, int_field, float_field, print_to_screen):
     #    return ""
