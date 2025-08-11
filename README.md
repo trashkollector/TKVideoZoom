@@ -8,8 +8,8 @@ ZOOM IN, ZOOM OUT, SLIDE, and WOBBLE
 
 <img width="1182" height="825" alt="Image" src="https://github.com/user-attachments/assets/7b756953-ab3d-4bc9-82e2-5bc356bda0a4" />
 
-[https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/416120a9-7f7a-41ef-92f4-553da90fbb98/transcode=true,width=450,optimized=true/demo1.webm](https://civitai.com/models/1821164/video-zoom-in-zoom-out-slide-wobble-effects-for-existing-video)
 
+https://civitai.com/models/1821164/video-zoom-in-zoom-out-slide-wobble-effects-for-existing-video
 
 for manual install
 ---------------------
