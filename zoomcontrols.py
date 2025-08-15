@@ -25,7 +25,7 @@ class TKVideoZoom:
                 "audio": ("AUDIO",),
                 "frame_count":  ("INT",),
                 "movement_speed": (["very slow", "slow ","medium", "fast", "very fast"],),
-                "movement_type": (["zoom in", "zoom out","wobble","slide"],),
+                "movement_type": (["zoom in", "zoom out","wobble","slide","spin","materialize"],),
                 "up_dn": (["top", "bottom","center"],),
                 "left_right": (["left", "right","center"],),
                 "visual_effect": (["normal", "grayscale","sepia"],),
@@ -82,6 +82,10 @@ class TKVideoZoom:
             increment = True
         elif (movement_type == "slide") :
             factor = 2.0
+        elif (movement_type == "spin") :
+            factor = 1.3
+        else :
+            factor = 1.0
             
         i=0
         zoomW = width
@@ -91,11 +95,14 @@ class TKVideoZoom:
         slideY=0
         xOff=0
         yOff=0
+        angle=0
+        stopSpin=False
+        alpha=0
      
-        print("Applying TK Effect")
+        print("Applying TK Effect "+movement_type+" "+movement_speed)
      
         for frame in video_numpy: 
-            if (i >= frame_count-1) :
+            if (i > frame_count-1) :
                 break
             
             zoomW = int(width * factor)
@@ -141,6 +148,9 @@ class TKVideoZoom:
                 yTemp =  diffH + int( y_trans[i] * speed) 
                 if (yTemp>0) and (yTemp + height < zoomH) :
                    yOff = yTemp
+                   
+            #elif (movement_type == "spin") :
+                
                
 
             # start y, end y, start x , end x --- CROP
@@ -149,6 +159,10 @@ class TKVideoZoom:
             # all other movments    
             elif (movement_type=="wobble") :
                 cropImg = zoomFrame[ yOff:height+yOff,    xOff:width+xOff :]
+            elif (movement_type == "spin") :
+                cropImg = self.continuous_rotate(zoomFrame, angle)
+            elif (movement_type =="materialize") :
+                 cropImg = self.materialize(zoomFrame, alpha)
             else :
                 cropImg = zoomFrame[ diffH:height+diffH,   diffW:width+diffW, :]
                 
@@ -174,14 +188,29 @@ class TKVideoZoom:
             elif  (movement_type == "wobble") :
                 factor = 1.3
             elif (movement_type =="slide") :
-                if (speed=="slow") or (speed =="very slow") :
-                    factor = 1.3
-                else :
-                    factor = 1.7   #  static always
+                if (movement_speed=="very slow")  :
+                    factor = 1.1
+                if (movement_speed=="slow")  :
+                    factor = 1.2               
+                if (movement_speed=="medium")  :
+                    factor = 1.3               
+                if (movement_speed=="fast")  :
+                    factor = 1.4               
+                if (movement_speed=="very fast")  :
+                    factor = 1.5
                     
             i = i+1
             
+            # Increment the angle for the next frame
+            if (angle >= 340) :
+                angle =0
+                stopSpin=True
+            elif (not stopSpin) :
+                angle = (angle + (1 * speed)) % 360  # Rotate by 1 degree per frame, loop from 0 to 359
             
+            alpha += (0.01 * speed) # Adjust this value for faster/slower transition
+            if (alpha >1.0) :
+               alpha=1.0
             
         # Convert to tensor
         numpy_array = np.array(frames)
@@ -272,36 +301,60 @@ class TKVideoZoom:
         sepia[:,:,2] *= normalized_gray #R
         return np.array(sepia, np.uint8)        
         
+    
+    def continuous_rotate(self, img, angle):
+        height, width = img.shape[:2]
+        center = (width // 2, height // 2)
+
+
+        # Get the 2D rotation matrix
+        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0) # Angle, scale
+
+        # Apply the affine transformation
+        rotated_img = cv2.warpAffine(img, rotation_matrix, (width, height), borderValue=(150,150,150))
+
+        return rotated_img  
+
+    # alpha 1.0 = solid, 0 = full transparent.
+    def materialize(self, img, alpha) :
+        height, width = img.shape[:2]
+        bg = self.checkerboard(width, height)
         
-    """
-        The node will always be re executed if any of the inputs change but
-        this method can be used to force the node to execute again even when the inputs don't change.
-        You can make this node return a number or a string. This value will be compared to the one returned the last time the node was
-        executed, if it is different the node will be executed again.
-        This method is used in the core repo for the LoadImage node where they return the image hash as a string, if the image hash
-        changes between executions the LoadImage node is executed again.
-    """
-    
-    
-    
-    
-    
-    #@classmethod
-    #def IS_CHANGED(s, image, string_field, int_field, float_field, print_to_screen):
-    #    return ""
-
-# Set the web directory, any .js file in that directory will be loaded by the frontend as a frontend extension
-# WEB_DIRECTORY = "./somejs"
+         
+        mat_img = cv2.addWeighted(img, alpha, bg, 1-alpha, 0)
+        return mat_img
 
 
-# Add custom API routes, using router
-from aiohttp import web
-from server import PromptServer
+    def checkerboard(self, width, height) :
+        checkerboard_img = np.zeros((height, width, 3), dtype=np.uint8)
 
-@PromptServer.instance.routes.get("/tkvideozoom")
-async def get_tkzoomcontrols(request):
-    return web.json_response("tkvideozoom")
+        square_size = 10
+        # Define colors (BGR format for OpenCV)
+        color1 = (30, 30, 30) 
+        color2 = (80, 80, 80)  
 
+        # Loop through rows and columns to draw squares
+        for row in range(height // square_size):
+            for col in range(width // square_size):
+                # Determine which color to use based on row and column parity
+                if (row + col) % 2 == 0:
+                    color = color1
+                else:
+                    color = color2
+
+                # Calculate coordinates for the current square
+                x1 = col * square_size
+                y1 = row * square_size
+                x2 = x1 + square_size
+                y2 = y1 + square_size
+
+                # Draw the rectangle (square) on the image
+                checkerboard_img = cv2.rectangle(checkerboard_img, (x1, y1), (x2, y2), color, -1) # -1 fills the rectangle
+        
+        
+        return checkerboard_img
+        
+        
 
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
