@@ -1,11 +1,12 @@
 import cv2
 import nodes
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw
 import torchvision.transforms as Transforms
 import torch.nn.functional as F   
 import numpy as np
 import random
+import comfy.utils
 
 #  TK Collector - Custom Node for Video Zooming
 #  July 31, 2025
@@ -25,7 +26,7 @@ class TKVideoZoom:
                 "audio": ("AUDIO",),
                 "frame_count":  ("INT",),
                 "movement_speed": (["very slow", "slow ","medium", "fast", "very fast"],),
-                "movement_type": (["zoom in", "zoom out","wobble","slide","spin","materialize"],),
+                "movement_type": (["zoom in", "zoom out","wobble","slide","spin","materialize","seesaw"],),
                 "up_dn": (["top", "bottom","center"],),
                 "left_right": (["left", "right","center"],),
                 "visual_effect": (["normal", "grayscale","sepia"],),
@@ -50,6 +51,9 @@ class TKVideoZoom:
     #    This results in a 4D array with the shape (frames, height, width, channels).
     
     def tkvideozoom(self, image, audio, frame_count, up_dn, left_right, movement_speed, movement_type, visual_effect):
+        
+        pbar = comfy.utils.ProgressBar(frame_count) 
+         
         tensor_shape = image.shape
         height = tensor_shape[1]
         width = tensor_shape[2]
@@ -82,14 +86,17 @@ class TKVideoZoom:
             increment = True
         elif (movement_type == "slide") :
             factor = 2.0
+        elif (movement_type == "seesaw") :
+            factor = 1.0
         elif (movement_type == "spin") :
             factor = 1.3
         else :
             factor = 1.0
-            
-        i=0
+           
         zoomW = width
         zoomH = height
+        
+        i=0
         frames=[]
         slideX=0
         slideY=0
@@ -98,13 +105,20 @@ class TKVideoZoom:
         angle=0
         stopSpin=False
         alpha=0
-     
+        incSway=True
+      
         print("Applying TK Effect "+movement_type+" "+movement_speed)
      
+            
         for frame in video_numpy: 
+            print(".",end="")
             if (i > frame_count-1) :
                 break
-            
+                
+
+            if pbar:
+                pbar.update(i)
+                    
             zoomW = int(width * factor)
             zoomH = int(height * factor)
 
@@ -148,8 +162,7 @@ class TKVideoZoom:
                 yTemp =  diffH + int( y_trans[i] * speed) 
                 if (yTemp>0) and (yTemp + height < zoomH) :
                    yOff = yTemp
-                   
-            #elif (movement_type == "spin") :
+
                 
                
 
@@ -161,8 +174,12 @@ class TKVideoZoom:
                 cropImg = zoomFrame[ yOff:height+yOff,    xOff:width+xOff :]
             elif (movement_type == "spin") :
                 cropImg = self.continuous_rotate(zoomFrame, angle)
+            elif (movement_type == "seesaw") :
+                cropImg = self.continuous_rotate(zoomFrame, angle)
             elif (movement_type =="materialize") :
                  cropImg = self.materialize(zoomFrame, alpha)
+            elif (movement_type =="curl") :
+                 cropImg = self.page_curl(zoomFrame, curl_radius, angle)
             else :
                 cropImg = zoomFrame[ diffH:height+diffH,   diffW:width+diffW, :]
                 
@@ -201,13 +218,26 @@ class TKVideoZoom:
                     
             i = i+1
             
-            # Increment the angle for the next frame
-            if (angle >= 340) :
-                angle =0
-                stopSpin=True
-            elif (not stopSpin) :
-                angle = (angle + (1 * speed)) % 360  # Rotate by 1 degree per frame, loop from 0 to 359
+            if movement_type=="spin" :
+                # Increment the angle for the next frame
+                if (angle >= 340) :
+                    angle =0
+                    stopSpin=True
+                elif (not stopSpin) :
+                    angle = (angle + (1 * speed)) % 360  
+                    
+            elif movement_type=="seesaw":
+                if incSway :
+                   angle +=  (1 * speed)
+                else :  
+                   angle -=  (1 * speed)
+                if angle > 30 :
+                    incSway=False
+                elif angle < -30 :
+                    incSway=True
+                
             
+            # materialize
             alpha += (0.01 * speed) # Adjust this value for faster/slower transition
             if (alpha >1.0) :
                alpha=1.0
@@ -305,15 +335,39 @@ class TKVideoZoom:
     def continuous_rotate(self, img, angle):
         height, width = img.shape[:2]
         center = (width // 2, height // 2)
+        
+        # Create an alpha channel, fully opaque (255)
+        alpha_channel = np.full((height, width), 255, dtype=np.uint8)
 
-
+        # Stack the RGB and alpha channels to create RGBA
+        imgalpha = np.dstack((img, alpha_channel))
+            
         # Get the 2D rotation matrix
         rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0) # Angle, scale
 
         # Apply the affine transformation
-        rotated_img = cv2.warpAffine(img, rotation_matrix, (width, height), borderValue=(150,150,150))
+        rotated_img = cv2.warpAffine(imgalpha, rotation_matrix, (width, height), borderMode=cv2.BORDER_TRANSPARENT)
+  
 
-        return rotated_img  
+        rimg = Image.fromarray(rotated_img)
+        if rimg.mode != 'RGBA': 
+            rimg = rimg.convert('RGBA')
+
+
+        rimg = Image.fromarray(rotated_img)
+        simg = Image.fromarray(img)
+        if simg.mode != 'RGBA': 
+            simg = simg.convert('RGBA')
+        
+        result_img = Image.alpha_composite(simg, rimg)  # bg, fg
+        
+        return result_img  
+
+
+
+
+
+
 
     # alpha 1.0 = solid, 0 = full transparent.
     def materialize(self, img, alpha) :
@@ -354,7 +408,10 @@ class TKVideoZoom:
         
         return checkerboard_img
         
-        
+   
+
+
+            
 
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
