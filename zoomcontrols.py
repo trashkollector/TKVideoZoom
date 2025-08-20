@@ -25,11 +25,11 @@ class TKVideoZoom:
                 "image": ("IMAGE",),
                 "audio": ("AUDIO",),
                 "frame_count":  ("INT",),
-                "movement_speed": (["very slow", "slow ","medium", "fast", "very fast"],),
+                "movement_speed": (["very slow", "slow","medium", "fast", "very fast"],),
                 "movement_type": (["zoom in", "zoom out","wobble","slide","spin","materialize","seesaw"],),
                 "up_dn": (["top", "bottom","center"],),
                 "left_right": (["left", "right","center"],),
-                "visual_effect": (["normal", "grayscale","sepia"],),
+                "visual_effect": (["normal", "grayscale","sepia","noise"],),
 
             },
         }
@@ -164,7 +164,15 @@ class TKVideoZoom:
                    yOff = yTemp
 
                 
-               
+            # color change  
+            if (visual_effect == "grayscale") :
+                zoomFrame = np.array( self.grayscale(zoomFrame))
+            elif (visual_effect =="sepia") :
+                zoomFrame = np.array( self.sepia(zoomFrame))
+            elif (visual_effect == "noise") :
+                ran = i % (int(100 / (1+(speed/3))))
+                if (ran >0 ) and (ran < 10) :
+                   zoomFrame = np.array(self.noise(zoomFrame))
 
             # start y, end y, start x , end x --- CROP
             if (movement_type == "slide") :
@@ -178,16 +186,13 @@ class TKVideoZoom:
                 cropImg = self.continuous_rotate(zoomFrame, angle)
             elif (movement_type =="materialize") :
                  cropImg = self.materialize(zoomFrame, alpha)
-            elif (movement_type =="curl") :
-                 cropImg = self.page_curl(zoomFrame, curl_radius, angle)
             else :
                 cropImg = zoomFrame[ diffH:height+diffH,   diffW:width+diffW, :]
                 
                 
-            if (visual_effect == "grayscale") :
-                cropImg = np.array( self.grayscale(cropImg))
-            elif (visual_effect =="sepia") :
-                cropImg = np.array( self.sepia(cropImg))
+
+
+                    
 
                 
             frame = cropImg
@@ -316,6 +321,25 @@ class TKVideoZoom:
         # Create an image from the array
         return filt
             
+        
+    def noise (self, src_image) :
+        mean = 0
+        variance = 2000 # Adjust for desired noise intensity
+        sigma = variance**0.5 # Standard deviation
+
+        # Generate Gaussian noise with the same shape as the image
+        # For grayscale: noise = np.random.normal(mean, sigma, img_gray.shape)
+        # For color:
+        noise = np.random.normal(mean, sigma, src_image.shape)
+
+        # Add noise to the image
+        noisy_img = src_image + noise
+
+        # Clip pixel values to the valid range (0-255) and convert to uint8
+        src_image = np.clip(noisy_img, 0, 255).astype(np.uint8)
+        return src_image
+        
+        
         
     def grayscale(self, src_image):
         gray = cv2.cvtColor(src_image, cv2.COLOR_RGB2GRAY)
