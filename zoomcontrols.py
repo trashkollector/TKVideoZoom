@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 import random
 import comfy.utils
+import math
 
 
 #  TK Collector - Custom Node for Video Zooming
@@ -27,7 +28,7 @@ class TKVideoZoom:
                 "audio": ("AUDIO",),
                 "frame_count":  ("INT",),
                 "movement_speed": (["very slow", "slow","medium", "fast", "very fast"],),
-                "movement_type": (["zoom in", "zoom out","wobble","slide","spin","materialize","seesaw"],),
+                "movement_type": (["zoom in", "zoom out","zoom both","camera shake","slide","spin","materialize","seesaw","wobble"],),
                 "up_dn": (["top", "bottom","center"],),
                 "left_right": (["left", "right","center"],),
                 "visual_effect": (["normal", "grayscale","sepia","noise"],),
@@ -65,6 +66,7 @@ class TKVideoZoom:
               
         video_numpy = (image.numpy() * 255).astype(np.uint8)  #convert video
    
+        # SPEED
         speed=1.0
         if (movement_speed=="very slow") :
             speed=1.0
@@ -77,22 +79,8 @@ class TKVideoZoom:
         elif (movement_speed=="very fast") :
             speed=20.0   
 
-
-        if (movement_type == "zoom in") :
-            factor = 1.0
-        elif  (movement_type == "zoom out") :
-            factor = 2.0
-        elif (movement_type == "wobble") :
-            factor = 1.1
-            increment = True
-        elif (movement_type == "slide") :
-            factor = 2.0
-        elif (movement_type == "seesaw") :
-            factor = 1.0
-        elif (movement_type == "spin") :
-            factor = 1.3
-        else :
-            factor = 1.0
+        # ZOOM
+        zfactor = self.getZoomFactor(movement_type, movement_speed)
            
         zoomW = width
         zoomH = height
@@ -108,25 +96,23 @@ class TKVideoZoom:
         alpha=0
         incSway=True
       
-        print("Applying TK Effect "+movement_type+" "+movement_speed)
+        print("Applying TK Effect "+movement_type+" "+movement_speed+" "+str(zfactor))
      
             
         for frame in video_numpy: 
             print(".",end="")
-            if (i > frame_count-1) :
-                break
-                
 
             if pbar:
                 pbar.update(i)
                     
-            zoomW = int(width * factor)
-            zoomH = int(height * factor)
+            zoomW = int(width * zfactor)
+            zoomH = int(height * zfactor)
 
-            # width, height
+            # width, height -  ZOOM IMAGE
             zoomFrame = cv2.resize(frame, (zoomW, zoomH), interpolation=cv2.INTER_AREA)
             
           
+            # CENTER
             diffH = int((zoomH - height)/2)
             diffW = int((zoomW - width)/2)
             
@@ -145,11 +131,9 @@ class TKVideoZoom:
             if (movement_type == "slide") :
                 if (left_right == "left") or (left_right=="center")  :
                     slideX = -1
-                    slideY = 0
                     diffW = zoomW - width                    
                 elif left_right == "right" :
                     slideX = 1
-                    slideY =0
                     diffW = 0 
                           
                 xTemp =  diffW + int((i * slideX) * speed) 
@@ -178,49 +162,49 @@ class TKVideoZoom:
             # start y, end y, start x , end x --- CROP
             if (movement_type == "slide") :
                 cropImg = zoomFrame[ diffH:height+diffH,    xOff:width+xOff :]
-            # all other movments    
+  
             elif (movement_type=="wobble") :
                 cropImg = zoomFrame[ yOff:height+yOff,    xOff:width+xOff :]
+                
             elif (movement_type == "spin") :
                 cropImg = self.continuous_rotate(zoomFrame, angle)
+                
             elif (movement_type == "seesaw") :
-                cropImg = self.continuous_rotate(zoomFrame, angle)
+                zoomFrame = self.continuous_rotate(zoomFrame, angle)
+                zoomnp = np.array(zoomFrame)
+                cropImg = zoomnp[ diffH:height+diffH,    diffW:width+diffW :]
+                
             elif (movement_type =="materialize") :
                  cropImg = self.materialize(zoomFrame, alpha)
+            elif (movement_type=="camera shake") :
+                freq=0.5
+                if (movement_speed=="slow" ) :
+                    freq=0.7
+                elif (movement_speed=="medium" ) :
+                    freq=1.0                   
+                elif (movement_speed=="fast" ) :
+                    freq=1.3
+                elif ( movement_speed=="very fast") :
+                    freq=2.0                 
+                cropImg = self.smooth_camera_shake(zoomFrame, 30, i, 15, freq)
             else :
                 cropImg = zoomFrame[ diffH:height+diffH,   diffW:width+diffW, :]
                 
-                
-
-
-                    
-
+   
                 
             frame = cropImg
             frames.append(frame)
             
             
-            if (movement_type == "zoom in") :
-                factor = factor + (0.001 * speed)
-                if factor >= 2.0 :
-                   factor =2.0
-            elif (movement_type == "zoom out") :
-                factor = factor - (0.001 * speed)
-                if (factor <= 1.0) :
-                    factor = 1.0
-            elif  (movement_type == "wobble") :
-                factor = 1.3
-            elif (movement_type =="slide") :
-                if (movement_speed=="very slow")  :
-                    factor = 1.1
-                if (movement_speed=="slow")  :
-                    factor = 1.2               
-                if (movement_speed=="medium")  :
-                    factor = 1.3               
-                if (movement_speed=="fast")  :
-                    factor = 1.4               
-                if (movement_speed=="very fast")  :
-                    factor = 1.5
+            if (movement_type == "zoom in") or (movement_type == "zoom both" and incSway==True) :
+                zfactor += (0.001 * speed)
+                if zfactor >= 2.0 :
+                   zfactor =2.0
+            elif (movement_type == "zoom out") or (movement_type=="zoom both" and incSway==False)            :
+                zfactor -= (0.001 * speed)
+                if (zfactor <= 1.0) :
+                    zfactor = 1.0
+            
                     
             i = i+1
             
@@ -234,14 +218,21 @@ class TKVideoZoom:
                     
             elif movement_type=="seesaw":
                 if incSway :
-                   angle +=  (1 * speed)
+                   angle +=  (1 * (speed / 10))
                 else :  
-                   angle -=  (1 * speed)
+                   angle -=  (1 * (speed /10))
                 if angle > 30 :
                     incSway=False
                 elif angle < -30 :
                     incSway=True
-                
+            elif movement_type=="zoom both" :
+                if incSway :
+                   if zfactor > 1.2:
+                      incSway = False
+                else :
+                   if (zfactor <= 1.01) :
+                      incSway = True
+                       
             
             # materialize
             alpha += (0.01 * speed) # Adjust this value for faster/slower transition
@@ -256,7 +247,75 @@ class TKVideoZoom:
         print(theTensor.shape)
             
         return (theTensor,audio)
+    
+    def getZoomFactor(self, movement_type, movement_speed) :
         
+        zfactor=1.0
+        
+        if (movement_type == "zoom in") :
+            zfactor = 1.0
+        elif  (movement_type == "zoom out") :
+            zfactor = 2.0
+        elif  (movement_type == "zoom both") :
+            zfactor = 1.1
+        elif (movement_type == "wobble") :
+            zfactor = 1.2
+        elif (movement_type == "camera shake") :
+            zfactor = 1.0
+        elif (movement_type == "slide") :
+            if (movement_speed=="very slow")  :
+                zfactor = 1.1
+            elif (movement_speed=="slow")  :
+                zfactor = 1.2               
+            elif (movement_speed=="medium")  :
+                zfactor = 1.3               
+            elif (movement_speed=="fast")  :
+                zfactor = 1.4               
+            elif (movement_speed=="very fast")  :
+                zfactor = 1.5            
+        elif (movement_type == "seesaw") :
+            zfactor = 1.4
+        elif (movement_type == "spin") :
+            zfactor = 1.3
+        else :
+            zfactor = 1.0
+            
+        return zfactor
+        
+    def smooth_camera_shake(self, img, fps,frame_idx, max_shift=15, frequency=3):
+        """
+        Adds a camera shake effect by randomly shifting frames.
+        
+        Args:
+            input_path (str): path to input video
+            output_path (str): path to save shaken video
+            max_shift (int): maximum pixel shift for shake
+        """  
+        height, width = img.shape[:2]
+
+
+  
+        t = frame_idx / fps  # time in seconds
+
+        # Smooth sine-wave shake (x and y with phase offset)
+        dx = int(max_shift * math.sin(2 * math.pi * frequency * t))
+        dy = int(max_shift * math.sin(2 * math.pi * frequency * t + math.pi/2))
+
+        # Apply transformation
+        M = np.float32([[1, 0, dx], [0, 1, dy]])
+        shaken_frame = cv2.warpAffine(img, M, (width, height))
+
+        # Optional: zoom slightly to hide black edges
+        zoom = 1.05
+        zoom_w, zoom_h = int(width * zoom), int(height * zoom)
+        resized = cv2.resize(shaken_frame, (zoom_w, zoom_h))
+
+        # Crop back to original size
+        x_start = (zoom_w - width) // 2
+        y_start = (zoom_h - height) // 2
+        cropped = resized[y_start:y_start+height, x_start:x_start+width]
+
+        return cropped    
         
     def generate_translation(
         self,
@@ -434,6 +493,12 @@ class TKVideoZoom:
         return checkerboard_img
         
    
+
+
+
+
+
+
 
 class TKVideoSpeedZones:
 
@@ -724,16 +789,7 @@ class TKVideoSmoothLooper:
         
         return (theTensor , audio, numFrame)
     
-    def createcrossfade(self, numpyarr, crossfadeframes,  frame_count, fps):
-            
-
-        i=0
-        for i in range(frame_count) :    
-            if i < int(fps/2.0) :
-                f = self.crossfade(numpyarr[i], numpyarr[frame_count-1-i], 0.5)
-                crossfadeframes.append(f)
-  
-        return crossfadeframes    
+ 
         
     def crossfade(self, frame1, frame2, alpha):
     
