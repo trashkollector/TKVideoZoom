@@ -8,6 +8,7 @@ import numpy as np
 import random
 import comfy.utils
 
+
 #  TK Collector - Custom Node for Video Zooming
 #  July 31, 2025
 #  https://github.com/trashkollector/TKVideoZoom
@@ -434,16 +435,311 @@ class TKVideoZoom:
         
    
 
+class TKVideoSpeedZones:
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "frame_count":  ("INT",{"default" : "81"}),
+                "fps":  ("FLOAT",{"default" : "16"}),
+                "new_fps": (["30","60"],),
+               
+                "speed_zone1": (["very slow", "slow","normal", "fast","very fast"],),
+                "speed_zone2": (["very slow", "slow","normal", "fast","very fast"],),
+                "speed_zone3": (["very slow", "slow","normal", "fast","very fast"],),
+                "speed_zone4": (["very slow", "slow","normal", "fast","very fast"],),
+          
+                
+
+            },
+        }
+
+
+
+    RETURN_TYPES = ("IMAGE","FLOAT","INT")
+    RETURN_NAMES = ("image","new_fps","new_frame_count")
+
+
+    FUNCTION = "tkvideospeedzones"
+
+    CATEGORY = "TKVideoZoom"
+
+    # Assume 'video_tensor' is your video data as a PyTorch tensor
+    # Format: [T, H, W, C] (Time, Height, Width, Channels)
+    # Data type should be uint8, with values in the range [0, 255]
+    #  number of channels (e.g., 3 for RGB)
+    # To represent a video, NumPy extends this concept by adding an extra dimension for the frames.
+    #    This results in a 4D array with the shape (frames, height, width, channels).
+    
+    def tkvideospeedzones(self, image , fps, new_fps, frame_count, speed_zone1, speed_zone2, speed_zone3, speed_zone4):
+        
+        #image = tensor
+ 
+       
+        pbar = comfy.utils.ProgressBar(frame_count) 
+        totalSeconds = float(frame_count) /fps
+        
+        
+        tensor_shape = image.shape
+        height = tensor_shape[1]
+        width = tensor_shape[2]
+                    
+        video_numpy = (image.numpy() * 255).astype(np.uint8)  #convert video
+      
+        i=0
+        frames=[]
+        numFrame=0
+      
+        print("Applying TK Speed ")
+     
+        prevframe=None    
+        
+        for frame in video_numpy: 
+            print(".",end="")
+            if (i > frame_count-1) :
+                break
+ 
+            if pbar:
+                pbar.update(i)
+                
+            if (i == 0) :
+                frames.append(frame)
+                numFrame +=1
+            
+            if (i > 0) :
+               ninserts=1.0
+               
+               # first section
+               if (i < int(float(frame_count) * 0.25)) :
+                   ninserts = self.calcInterpolatesForWarp(speed_zone1,fps, float(new_fps))
+                   
+               # second section
+               elif (i >= int(float(frame_count) * 0.25)) and  (i < int(float(frame_count) * 0.5)) : 
+                   ninserts = self.calcInterpolatesForWarp(speed_zone2,fps,float(new_fps))
+                   
+               # 3rd section
+               elif (i >= int(float(frame_count) * 0.5)) and  (i < int(float(frame_count) * 0.75)) : 
+                   ninserts = self.calcInterpolatesForWarp(speed_zone3,fps, float(new_fps))
+                   
+               # 4th section
+               elif (i >= int(float(frame_count) * 0.75)) : 
+                   ninserts = self.calcInterpolatesForWarp(speed_zone4,fps, float(new_fps))
+
+                 
+               if (ninserts > 0 and prevframe is not None) : 
+                   interopArr = self.interpolate_images_linear(prevframe, frame, int(ninserts))
+                   for interop in interopArr :           
+                       frames.append( interop)
+                       numFrame += 1
+               
+               if (ninserts < 0) :  
+                  ninserts = int(ninserts * -1.0)
+                  if i % ninserts == 0 :
+                      frames.append(frame)
+                      numFrame += 1
+                     
+               else :                   
+                  frames.append(frame)
+                  numFrame += 1
+            
+            prevframe = frames[-1]
+            i +=1
+            
+        # Convert to tensor
+        numpy_array = np.array(frames)
+        theTensor = torch.from_numpy(numpy_array)
+        theTensor = theTensor.float()  / 255.0
+        
+        print(theTensor.shape)
+        
+        return (theTensor , new_fps, numFrame)
+        
+        
+
+
+    def interpolate_images_linear(self, frame1, frame2, numInserts):
+        """
+        Performs linear interpolation between two frames.
+
+        Args:
+            frame1 (np.ndarray): The first frame (e.g., image data).
+            frame2 (np.ndarray): The second frame (e.g., image data).
+            alpha (float): The interpolation factor, a value between 0.0 and 1.0.
+                           0.0 corresponds to frame1, 1.0 corresponds to frame2.
+
+        Returns:
+            np.ndarray: The interpolated frame.
+
+        if not (0.0 <= alpha <= 1.0):
+            raise ValueError("Alpha must be between 0.0 and 1.0")
+        """    
+            
+        interpolated_frames = []
+        for i in range(int(numInserts)):
+            alpha = i / (numInserts+1) 
 
             
+            interpolated_frame = (1 - alpha) * frame1 + alpha * frame2
+            interpolated_frames.append(interpolated_frame)
 
-# A dictionary that contains all nodes you want to export with their names
-# NOTE: names should be globally unique
-NODE_CLASS_MAPPINGS = {
-    "TKVideoZoom": TKVideoZoom
-}
+        return interpolated_frames
+        
+        
+        
+    def calcInterpolatesForWarp(self, speedStr, fps, new_fps) :
+        
+        ratio = new_fps / fps
+        
+        if (speedStr=="slow") :
+            return 2.0   * ratio
+        elif (speedStr=="very slow") :
+            return 4.0   * ratio
+        elif (speedStr =="normal") :
+            return ratio
+        elif (speedStr =="fast") : 
+            return ratio / 2.0
+        elif (speedStr=="very fast") :
+            return ratio / 4.0
+ 
+      
+class TKVideoSmoothLooper:
+    
+    def __init__(self):
+        pass
 
-# A dictionary that contains the friendly/humanly readable titles for the nodes
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "TKVideoZoom": "TKVideoZoom"
-}
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "audio":  ("AUDIO",),
+                "fps":  ("FLOAT",{"default" : "16", "minimum" :"8", "maximum":"60"}),   
+                "loop_type": (["ping pong", "cross fade", "fade"],),
+
+            },
+        }
+
+
+
+    RETURN_TYPES = ("IMAGE","AUDIO","INT")
+    RETURN_NAMES = ("image","audio","new_frame_count")
+
+
+    FUNCTION = "tkvideosmoothlooper"
+
+    CATEGORY = "TKVideoZoom"
+    
+    
+    def tkvideosmoothlooper(self, image, audio, loop_type, fps):
+        
+        #image = tensor
+        
+        tensor_shape = image.shape
+        frame_count = tensor_shape[0]
+        height = tensor_shape[1]
+        width = tensor_shape[2]
+        
+        black_image = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        pbar = comfy.utils.ProgressBar(frame_count) 
+                    
+        video_numpy = (image.numpy() * 255).astype(np.uint8)  #convert video
+        
+      
+        frames=[]
+        ncross = int(fps/2.0)
+        numFrame=0
+   
+     
+        print("Applying TK Looper ")
+ 
+        i=0
+        for frame in video_numpy: 
+            print(".",end="")
+
+            if pbar:
+                pbar.update(i)
+      
+          
+            f=None
+            alpha=1
+            if ( i <= ncross)  :
+                alpha = i / ncross
+                    
+                if loop_type=="cross fade" :
+                   f = self.crossfade(frame, video_numpy[frame_count-1-i],1- alpha)
+                elif loop_type=="fade" :
+                   f = self.crossfade(frame, black_image, 1-alpha)
+                elif loop_type=="ping pong" :
+                   f = frame
+                   frames.append(f)
+                   numFrame +=1 
+                   
+            elif ( i > frame_count - ncross) :
+                alpha = (frame_count - i) / ncross
+                
+                
+                if loop_type=="cross fade" :
+                   f = self.crossfade(frame, video_numpy[i], 1-alpha)
+                elif loop_type =="fade" :
+                   f = self.crossfade(frame, black_image, 1-alpha) 
+                elif loop_type=="ping pong":
+                   f = frame    
+                   frames.append(f)
+                   numFrame +=1                   
+                   
+            else :
+                f= frame
+
+            frames.append(f)
+            numFrame +=1  
+          
+                
+          
+            i += 1
+            
+        revarr =[]
+        if (loop_type=="ping pong"):
+            
+            for frame in reversed(frames) :
+                 revarr.append(frame)
+            
+            frames = frames+ revarr
+            numFrame *= 2
+             
+            
+        # Convert to tensor
+        numpy_array = np.array(frames)
+        theTensor = torch.from_numpy(numpy_array)
+        theTensor = theTensor.float()  / 255.0
+        
+        print(theTensor.shape)
+        
+        return (theTensor , audio, numFrame)
+    
+    def createcrossfade(self, numpyarr, crossfadeframes,  frame_count, fps):
+            
+
+        i=0
+        for i in range(frame_count) :    
+            if i < int(fps/2.0) :
+                f = self.crossfade(numpyarr[i], numpyarr[frame_count-1-i], 0.5)
+                crossfadeframes.append(f)
+  
+        return crossfadeframes    
+        
+    def crossfade(self, frame1, frame2, alpha):
+    
+        interpolated_frame = (1 - alpha) * frame1 + alpha * frame2
+          
+        return interpolated_frame
+        
+    
+    
