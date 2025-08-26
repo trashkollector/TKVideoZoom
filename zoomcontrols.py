@@ -873,15 +873,17 @@ class TKVideoStitcher :
                   # slide
                   for x in range(16) :
                       chunk = targetWidth /16
-                      offset = targetWidth - (chunk * x)
+                      offset = int(targetWidth - (chunk * float(x)))
                       
                       endIdx = i+ 16
                       
                       if (endIdx >= len(bigVid)) :
                           endIdx = x
                           
-                      f = self.slide(bigVid[i+x], bigVid[endIdx], int(offset), targetWidth, targetHeight)
-                      
+                      f = self.slide(bigVid[i+x], bigVid[endIdx], offset, targetWidth, targetHeight)
+                      if (f is  None) :
+                          return (None, None)  #  something went horribly wrong
+                          
                       frames.append(f)
                       numFrame += 1  
                       
@@ -945,7 +947,7 @@ class TKVideoStitcher :
            for frame in video_numpy :
               f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
               frames.append(f)
-           sentinels.append( len(frms))
+           sentinels.append( len(frames))
   
   
        if (image4 is not None) :
@@ -967,9 +969,7 @@ class TKVideoStitcher :
         if (image is None) :
            return None
            
-  
-        # width, height -  ZOOM IMAGE      1000=2, 1200=2.3, factor 2, 500,600,      1000/500 > 1200/500
-        
+          
         if (  float(width) / float(targetWidth) < float(height) / float(targetHeight) ) :  # reduce by height factor
             factor = float(width)/float(targetWidth)
             zWidth=int(width / factor)
@@ -991,10 +991,16 @@ class TKVideoStitcher :
         
         
     def slide(self, frame1, frame2, offset, targetWidth, targetHeight, ):
+
     
         slideframe = frame1.copy()
-        slideframe[0:targetHeight,  0:offset,:]           = frame1[0:targetHeight,   targetWidth-offset:targetWidth,:]
-        slideframe[0:targetHeight,  offset:targetWidth,:] = frame2[0:targetHeight,   0:targetWidth-offset,:]
+        try :
+            slideframe[0:targetHeight,  0:offset,:]           = frame1[0:targetHeight,   targetWidth-offset:targetWidth,:]
+            slideframe[0:targetHeight,  offset:targetWidth,:] = frame2[0:targetHeight,   0:targetWidth-offset,:]
+        except ValueError :
+          print("Value error - Cancelling.. try again with different resolution")  
+          return None
+
           
         return slideframe
                     
