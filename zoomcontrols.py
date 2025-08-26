@@ -799,3 +799,197 @@ class TKVideoSmoothLooper:
         
     
     
+    
+    
+class TKVideoStitcher :
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {
+            "required": {
+                "targetFPS": ("FLOAT", {"default": "30"}),
+                "targetWidth": ("INT", {"default": "500"}),
+                "targetHeight": ("INT", {"default": "500"}),
+
+                "image1":  ("IMAGE", ),     
+                "image2":  ("IMAGE", ), 
+                
+                },
+            "optional": {
+
+                "audio1": ("AUDIO", ),   
+                "audio2": ("AUDIO", ),   
+                
+                "image3":  ("IMAGE", ),   
+                "audio3": ("AUDIO", ),   
+                
+                "image4":  ("IMAGE", ),        
+                "audio4": ("AUDIO", ),                 
+  
+                
+                }                
+            }
+        
+
+    RETURN_TYPES = ("IMAGE",  "AUDIO","FLOAT")
+    RETURN_NAMES = ("image","audio","fps")
+
+
+    FUNCTION = "tkvideostitcher"
+
+    #OUTPUT_NODE = False
+
+    CATEGORY = "TKVideoZoom"
+
+    
+    def tkvideostitcher(self, targetFPS, targetWidth, targetHeight, image1, image2, audio1=None, audio2=None, image3=None,audio3=None, image4=None, audio4=None):
+            
+  
+  
+        (bigVid ,sentinels) = self.appendImages(targetFPS, targetWidth, targetHeight, image1, image2, image3, image4, audio1, audio2, audio3,audio4)
+        
+        pbar = comfy.utils.ProgressBar(len(bigVid)) 
+         
+        ncross = 16
+        numFrame=0
+
+        frames=[]
+      
+        print("Applying Stitching "+str( len(bigVid) )
+     
+        i=0    
+        for i in range(  len(bigVid) ) : 
+            print(".",end="")
+
+            if (i >= len(bigVid) :
+                break
+                
+            if pbar:
+                pbar.update(i)
+
+            f=None
+            alpha=1
+            
+            foundSentinel=False
+            for sent in sentinels :
+                print("sentinel"+str(sent))
+                if ( i == sent -16)  :
+                  foundSentinel=True
+                  # slide
+                  for x in range(16) :
+                      f = self.crossfade(bigVid[i+x], bigVid[i+32-x],1- alpha)
+                      frames.append(f)
+                      numFrame += 1  
+                      i += 2
+                      
+            if not foundSentinel :
+                frames.append(frame)
+                numFrame += 1       
+                i += 1
+ 
+            
+        # Convert to tensor
+        numpy_array = np.array(frames)
+        theTensor = torch.from_numpy(numpy_array)
+        theTensor = theTensor.float()  / 255.0
+        
+        print(theTensor.shape)
+                        
+        return (theTensor , audio1, targetFPS)
+
+
+    def appendImages(self, targetFPS, targetWidth, targetHeight, image1,image2,image3,image4  ,audio1,audio2,audio3,audio4) :
+       
+       frames=[]
+       sentinels=[]
+       
+       # IMAGE 1
+       tensor_shape = image1.shape
+       frame_count = tensor_shape[0]
+       height = tensor_shape[1]
+       width = tensor_shape[2]
+        
+       video_numpy = (image1.numpy() * 255).astype(np.uint8)  #convert video
+       for frame in video_numpy :
+          f = self.resizeImage(frame, targetWidth, targetHeight, width , height)
+          frames.append(f)
+        sentinels.append( len(video_numpy))
+        
+       # IMAGE 2
+       tensor_shape = image2.shape
+       frame_count = tensor_shape[0]
+       height = tensor_shape[1]
+       width = tensor_shape[2]
+        
+       video_numpy = (image2.numpy() * 255).astype(np.uint8)  #convert video
+       for frame in video_numpy :
+          f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
+          frames.append(f)
+       sentinels.append( len(video_numpy))
+        
+
+       # IMAGE 3
+       if (image3 is not None) :
+           tensor_shape = image3.shape
+           frame_count = tensor_shape[0]
+           height = tensor_shape[1]
+           width = tensor_shape[2]
+            
+           video_numpy = (image3.numpy() * 255).astype(np.uint8)  #convert video
+           for frame in video_numpy :
+              f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
+              frames.append(f)
+           sentinels.append( len(video_numpy))
+  
+  
+       if (image4 is not None) :
+           tensor_shape = image4.shape
+           frame_count = tensor_shape[0]
+           height = tensor_shape[1]
+           width = tensor_shape[2]
+            
+           video_numpy = (image4.numpy() * 255).astype(np.uint8)  #convert video
+           for frame in video_numpy :
+              f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
+              frames.append(f)
+           sentinels.append( len(video_numpy))
+           
+       return (frames,sentinels)
+  
+    
+    def resizeImage(self, image, targetWidth,targetHeight, width, height) :
+        if (image is None) :
+           return None
+           
+  
+        # width, height -  ZOOM IMAGE      1000=2, 1200=2.3, factor 2, 500,600,      1000/500 > 1200/500
+        
+        if (  float(width) / float(targetWidth) < float(height) / float(targetHeight) ) :  # reduce by height factor
+            factor = float(width)/float(targetWidth)
+            zWidth=int(width / factor)
+            zHeight=int(height / factor)
+            zoomFrame = cv2.resize(image, (zWidth,zHeight), interpolation=cv2.INTER_AREA)
+            diffH = int((zHeight - targetHeight)/2)
+            cropImg = zoomFrame[ diffH:targetHeight+diffH,    0:targetWidth :]
+        else :  # reduce by width factor
+            factor = float(height)/float(targetHeight)
+            zWidth=int(width / factor)
+            zHeight=int(height / factor)
+            zoomFrame = cv2.resize(image, (zWidth, zHeight), interpolation=cv2.INTER_AREA)
+            diffW = int((zWidth - targetWidth)/2)
+            cropImg = zoomFrame[ 0:targetHeight,    diffW:targetWidth+diffW :]
+          
+            
+            
+        return cropImg
+        
+        
+    def crossfade(self, frame1, frame2, alpha):
+    
+        interpolated_frame = (1 - alpha) * frame1 + alpha * frame2
+          
+        return interpolated_frame
+                    
