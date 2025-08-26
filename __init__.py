@@ -9,9 +9,9 @@ NODE_CLASS_MAPPINGS = {
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
 NODE_DISPLAY_NAME_MAPPINGS = {
-     "TKVideoZoom": "Various Video Effects, Zoom,Slide,Spin,etc.",
-     "TKVideoSpeedZones": "Slow down/speed up video in parts of video.",
+     "TKVideoZoom": "Video Effects",
+     "TKVideoSpeedZones": "Video Speed Adjuster",
      "TKVideoSmoothLooper": "Loop a video .",
-     "TKVideoStitcher": "Stitch video clips together with transition.",
+     "TKVideoStitcher": "Video Stitcher.",
 
 }

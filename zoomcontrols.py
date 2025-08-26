@@ -810,7 +810,6 @@ class TKVideoStitcher :
 
         return {
             "required": {
-                "targetFPS": ("FLOAT", {"default": "30"}),
                 "targetWidth": ("INT", {"default": "500"}),
                 "targetHeight": ("INT", {"default": "500"}),
 
@@ -819,23 +818,16 @@ class TKVideoStitcher :
                 
                 },
             "optional": {
-
-                "audio1": ("AUDIO", ),   
-                "audio2": ("AUDIO", ),   
+                "audio": ("AUDIO", ),   
                 
                 "image3":  ("IMAGE", ),   
-                "audio3": ("AUDIO", ),   
-                
                 "image4":  ("IMAGE", ),        
-                "audio4": ("AUDIO", ),                 
-  
-                
                 }                
             }
         
 
-    RETURN_TYPES = ("IMAGE",  "AUDIO","FLOAT")
-    RETURN_NAMES = ("image","audio","fps")
+    RETURN_TYPES = ("IMAGE",  "AUDIO",)
+    RETURN_NAMES = ("image","audio",)
 
 
     FUNCTION = "tkvideostitcher"
@@ -845,50 +837,61 @@ class TKVideoStitcher :
     CATEGORY = "TKVideoZoom"
 
     
-    def tkvideostitcher(self, targetFPS, targetWidth, targetHeight, image1, image2, audio1=None, audio2=None, image3=None,audio3=None, image4=None, audio4=None):
-            
-  
-  
-        (bigVid ,sentinels) = self.appendImages(targetFPS, targetWidth, targetHeight, image1, image2, image3, image4, audio1, audio2, audio3,audio4)
+    def tkvideostitcher(self, targetWidth, targetHeight,  image1, image2,image3=None,image4=None, audio=None):
+
+        (bigVid ,sentinels) = self.appendImages(targetWidth, targetHeight, image1, image2, image3, image4, )
         
-        pbar = comfy.utils.ProgressBar(len(bigVid)) 
-         
-        ncross = 16
+        pbar = comfy.utils.ProgressBar( len(bigVid) ) 
         numFrame=0
 
         frames=[]
       
-        print("Applying Stitching "+str( len(bigVid) )
+        print("Applying Stitching ")
      
         i=0    
-        for i in range(  len(bigVid) ) : 
+        while True : 
             print(".",end="")
 
-            if (i >= len(bigVid) :
+            if (i >= len(bigVid)-1) :
                 break
                 
+            if (i < 16) :
+                i += 1
+                continue;
+               
             if pbar:
                 pbar.update(i)
 
             f=None
-            alpha=1
             
             foundSentinel=False
-            for sent in sentinels :
-                print("sentinel"+str(sent))
-                if ( i == sent -16)  :
+            for sentinel in sentinels :
+           
+                if ( i == sentinel -16)  :
+                
                   foundSentinel=True
                   # slide
                   for x in range(16) :
-                      f = self.crossfade(bigVid[i+x], bigVid[i+32-x],1- alpha)
+                      chunk = targetWidth /16
+                      offset = targetWidth - (chunk * x)
+                      
+                      endIdx = i+ 16
+                      
+                      if (endIdx >= len(bigVid)) :
+                          endIdx = x
+                          
+                      f = self.slide(bigVid[i+x], bigVid[endIdx], int(offset), targetWidth, targetHeight)
+                      
                       frames.append(f)
                       numFrame += 1  
-                      i += 2
+                      
+                  i+=16
                       
             if not foundSentinel :
-                frames.append(frame)
+                frames.append(bigVid[i])
                 numFrame += 1       
-                i += 1
+                
+            i += 1
  
             
         # Convert to tensor
@@ -898,10 +901,10 @@ class TKVideoStitcher :
         
         print(theTensor.shape)
                         
-        return (theTensor , audio1, targetFPS)
+        return (theTensor , audio, )
 
 
-    def appendImages(self, targetFPS, targetWidth, targetHeight, image1,image2,image3,image4  ,audio1,audio2,audio3,audio4) :
+    def appendImages(self,  targetWidth, targetHeight, image1,image2,image3,image4  ) :
        
        frames=[]
        sentinels=[]
@@ -916,7 +919,7 @@ class TKVideoStitcher :
        for frame in video_numpy :
           f = self.resizeImage(frame, targetWidth, targetHeight, width , height)
           frames.append(f)
-        sentinels.append( len(video_numpy))
+       sentinels.append( len(frames))
         
        # IMAGE 2
        tensor_shape = image2.shape
@@ -928,7 +931,7 @@ class TKVideoStitcher :
        for frame in video_numpy :
           f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
           frames.append(f)
-       sentinels.append( len(video_numpy))
+       sentinels.append( len(frames))
         
 
        # IMAGE 3
@@ -942,7 +945,7 @@ class TKVideoStitcher :
            for frame in video_numpy :
               f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
               frames.append(f)
-           sentinels.append( len(video_numpy))
+           sentinels.append( len(frms))
   
   
        if (image4 is not None) :
@@ -955,7 +958,7 @@ class TKVideoStitcher :
            for frame in video_numpy :
               f = self.resizeImage(frame, targetWidth, targetHeight, width, height)
               frames.append(f)
-           sentinels.append( len(video_numpy))
+           sentinels.append( len(frames))
            
        return (frames,sentinels)
   
@@ -987,9 +990,11 @@ class TKVideoStitcher :
         return cropImg
         
         
-    def crossfade(self, frame1, frame2, alpha):
+    def slide(self, frame1, frame2, offset, targetWidth, targetHeight, ):
     
-        interpolated_frame = (1 - alpha) * frame1 + alpha * frame2
+        slideframe = frame1.copy()
+        slideframe[0:targetHeight,  0:offset,:]           = frame1[0:targetHeight,   targetWidth-offset:targetWidth,:]
+        slideframe[0:targetHeight,  offset:targetWidth,:] = frame2[0:targetHeight,   0:targetWidth-offset,:]
           
-        return interpolated_frame
+        return slideframe
                     
