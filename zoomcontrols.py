@@ -810,6 +810,7 @@ class TKVideoStitcher :
 
         return {
             "required": {
+                "transition": (["slide left", "slide up","crossfade","barn door","crunch"],),
                 "targetWidth": ("INT", {"default": "500"}),
                 "targetHeight": ("INT", {"default": "500"}),
 
@@ -837,13 +838,13 @@ class TKVideoStitcher :
     CATEGORY = "TKVideoZoom"
 
     
-    def tkvideostitcher(self, targetWidth, targetHeight,  image1, image2,image3=None,image4=None, audio=None):
+    def tkvideostitcher(self, transition, targetWidth, targetHeight,  image1, image2,image3=None,image4=None, audio=None):
 
         (bigVid ,sentinels) = self.appendImages(targetWidth, targetHeight, image1, image2, image3, image4, )
         
         pbar = comfy.utils.ProgressBar( len(bigVid) ) 
         numFrame=0
-
+        FRAME_TWEAKS=16
         frames=[]
       
         print("Applying Stitching ")
@@ -855,7 +856,7 @@ class TKVideoStitcher :
             if (i >= len(bigVid)-1) :
                 break
                 
-            if (i < 16) :
+            if (i < FRAME_TWEAKS) :
                 i += 1
                 continue;
                
@@ -867,33 +868,65 @@ class TKVideoStitcher :
             foundSentinel=False
             for sentinel in sentinels :
            
-                if ( i == sentinel -16)  :
+                if ( i == sentinel -FRAME_TWEAKS)  :
                 
-                  foundSentinel=True
-                  # slide
-                  for x in range(16) :
-                      chunk = targetWidth /16
-                      offset = int(targetWidth - (chunk * float(x)))
-                      
-                      endIdx = i+ 16
-                      
-                      if (endIdx >= len(bigVid)) :
-                          endIdx = x
+                    foundSentinel=True
+                    # slide
+                    for x in range(FRAME_TWEAKS) :
+                        chunk = targetWidth /FRAME_TWEAKS
+                        
+                        if (transition=="slide up") :
+                            chunk = targetHeight/FRAME_TWEAKS
+                            
+                        
                           
-                      f = self.slide(bigVid[i+x], bigVid[endIdx], offset, targetWidth, targetHeight)
-                      if (f is  None) :
-                          return (None, None)  #  something went horribly wrong
+                        if (transition=="crossfade") :
+                            endIdx = i+x+FRAME_TWEAKS
+                            
+                            if (endIdx >= len(bigVid)) :
+                                 endIdx = x
+                                 
+                            alpha = 1.0 - (1.0/float(x+1)) 
+                            if (alpha > 1.0) : 
+                                alpha=1.0
+                            elif (alpha < 0) :
+                                alpha = 0
+                                
+                            f = self.crossfade(bigVid[i+x], bigVid[endIdx], alpha)
+                        elif (transition=="slide left" or transition=="slide up") :  # slide up, Slide left, barn door
+                            offset = int(targetWidth - (chunk * float(x)))
+                            if (transition=="slide up"):
+                               offset = int(targetHeight - (chunk * float(x))) 
+                               
+                            endIdx = i+x+FRAME_TWEAKS
+                            if (endIdx >= len(bigVid)) :
+                                 endIdx = x
+                            f = self.slide(    bigVid[i+x], bigVid[endIdx], int(offset), targetWidth, targetHeight, transition)
+                            
+                        elif (transition=="barn door") or (transition=="crunch") :
                           
-                      frames.append(f)
-                      numFrame += 1  
+                            offset= (x*chunk)/2
+                               
+                            endIdx = i+x+FRAME_TWEAKS
+                            if (endIdx >= len(bigVid)) :
+                                 endIdx = x
+                            f = self.slide(    bigVid[i+x], bigVid[endIdx], int(offset), targetWidth, targetHeight, transition)                            
+                          
+                        if (f is  None) :
+                              return (None, None)  #  something went horribly wrong
+                              
+                        frames.append(f)
+                        numFrame += 1  
                       
-                  i+=16
+                    i += FRAME_TWEAKS
+                    if (transition=="crossfade") or (transition=="barn door") or (transition=="crunch") :
+                        i+= FRAME_TWEAKS
                       
             if not foundSentinel :
                 frames.append(bigVid[i])
                 numFrame += 1       
                 
-            i += 1
+                i += 1
  
             
         # Convert to tensor
@@ -969,7 +1002,7 @@ class TKVideoStitcher :
         if (image is None) :
            return None
            
-          
+        
         if (  float(width) / float(targetWidth) < float(height) / float(targetHeight) ) :  # reduce by height factor
             factor = float(width)/float(targetWidth)
             zWidth=int(width / factor)
@@ -990,17 +1023,39 @@ class TKVideoStitcher :
         return cropImg
         
         
-    def slide(self, frame1, frame2, offset, targetWidth, targetHeight, ):
+    def slide(self, frame1, frame2, offset, targetWidth, targetHeight, transition):
 
     
         slideframe = frame1.copy()
         try :
-            slideframe[0:targetHeight,  0:offset,:]           = frame1[0:targetHeight,   targetWidth-offset:targetWidth,:]
-            slideframe[0:targetHeight,  offset:targetWidth,:] = frame2[0:targetHeight,   0:targetWidth-offset,:]
-        except ValueError :
-          print("Value error - Cancelling.. try again with different resolution")  
+            if (transition=="slide left") :
+                #           HEIGHT              WIDTH                                            HEIGHT                           WIDTH
+                slideframe[0:targetHeight,       0:offset,:]                       = frame1[0:targetHeight,                     targetWidth-offset:targetWidth,:]
+                slideframe[0:targetHeight,       offset:targetWidth,:]             = frame2[0:targetHeight,                     0:targetWidth-offset,:]
+            elif (transition =="slide up")  : # SLIDE DOWN
+                slideframe[0:offset,             0:targetWidth,:]                  = frame1[targetHeight-offset:targetHeight,   0:targetWidth,:]
+                slideframe[offset:targetHeight,  0:targetWidth,:]                  = frame2[0:targetHeight-offset,              0:targetWidth,:]  
+            elif (transition=="crunch") :
+                slideframe[0:targetHeight,       0:offset,:]                       = frame2[0:targetHeight,                     0:offset,:]
+                slideframe[0:targetHeight,       targetWidth-offset:targetWidth,:] = frame2[0:targetHeight,                     targetWidth-offset:targetWidth,:]   
+            elif (transition=="barn door") :
+                origin = int(targetWidth/2)
+                slideframe[0:targetHeight,       origin-offset:origin,:]           = frame2[0:targetHeight,                     origin-offset:origin,:]
+                slideframe[0:targetHeight,       origin:origin+offset,:]           = frame2[0:targetHeight,                     origin:origin+offset,:]                  
+        except ValueError as e :
+          print(e)
+
+          print("Value error - Cancelling.. try again with different resolution  OFFSET:" + str(offset)   )
           return None
 
           
         return slideframe
                     
+    def crossfade(self, frame1, frame2, alpha):
+
+    
+        interpolated_frame = frame1.copy()
+        interpolated_frame = (1 - alpha) * frame1 + alpha * frame2
+
+          
+        return interpolated_frame
