@@ -1,7 +1,18 @@
 # TKVideoZoom   
+Apply various effects to existing video, ZOOM IN , ZOOM OUT, SPIN, SLIDE, etc
+
 # TKVideoStitcher   
+Stitch together (concatenate) videos.   Transition effects included
+
 # TKVideoSpeedZones  
+Change the speed of various parts of video to create more dynamic movmement.
+
 # TKVideoSmoothLooper
+Loop a video, so it appears more seamless when it is being looped.
+
+# TKVideoFuse
+Take 2 Videos and fuse them together into 1 video.
+
 
 Cutom Nodes for COMFY UI
 
