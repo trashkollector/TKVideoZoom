@@ -1,7 +1,7 @@
 [project]
 name = "ComfyUI-TKVideoZoom"
-description = "TKVideoZoom - various video effects (zoom,slide,spin,etc), TKVideoSmoothLooper, TKVideoSpeedZones."
-version = "1.14"
+description = "TKVideoZoom - various video effects (zoom,slide,spin,etc), TKVideoStitcher, TKVideoFuse, TKVideoSmoothLooper, TKVideoSpeedZones."
+version = "1.15"
 license = { file = "LICENSE" }
 
 [project.urls]
