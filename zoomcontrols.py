@@ -1,7 +1,7 @@
 import cv2
 import nodes
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 import torchvision.transforms as Transforms
 import torch.nn.functional as F   
 import numpy as np
@@ -1059,3 +1059,205 @@ class TKVideoStitcher :
 
           
         return interpolated_frame
+        
+        
+        
+        
+class TKVideoFuse :
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {
+            "required": {
+                "orientation":  (["landscape","portrait"],),
+                "targetWidth": ("INT", {"default": "500"}),
+                "targetHeight": ("INT", {"default": "500"}),
+
+                "image1":  ("IMAGE", ),     
+                "image2":  ("IMAGE", ), 
+                
+                },
+            "optional": {
+                "audio": ("AUDIO", ),   
+   
+                }                
+            }
+        
+
+    RETURN_TYPES = ("IMAGE",  "AUDIO",)
+    RETURN_NAMES = ("image","audio",)
+
+
+    FUNCTION = "tkvideofuse"
+
+    #OUTPUT_NODE = False
+
+    CATEGORY = "TKVideoZoom"
+
+    
+    def tkvideofuse(self, orientation, targetWidth, targetHeight,  image1, image2, audio=None):
+        gap  = 100
+        if orientation == "landscape" :
+            targetW = int ((targetWidth/2)+int(gap))
+            targetH = int(targetHeight)
+        else :
+            targetH = int (targetHeight/2)+ int(gap)
+            targetW = int(targetWidth  )   
+
+
+        #image = tensor
+        
+        tensor_shape1 = image1.shape
+        frame_count1 = tensor_shape1[0]
+        height = tensor_shape1[1]
+        width = tensor_shape1[2]
+        
+        
+        
+        tensor_shape2 = image2.shape
+        frame_count2 = tensor_shape2[0]
+        height = tensor_shape2[1]
+        width = tensor_shape2[2]
+
+        pbar = comfy.utils.ProgressBar(frame_count1) 
+            
+     
+        frames=[]
+        video_numpy1 = (image1.numpy() * 255).astype(np.uint8)  #convert video
+        video_numpy2 = (image2.numpy() * 255).astype(np.uint8)  #convert video
+     
+        print("Applying TK Video Fuser ")
+ 
+        i=0
+        for (nmp1, nmp2) in zip(video_numpy1, video_numpy2) : 
+            if (nmp1 is None) or (nmp2 is None) :
+                break
+                
+            print(".",end="")
+            
+            frame1 = Image.fromarray(nmp1)
+            frame2 = Image.fromarray(nmp2)
+            
+            resized_img1 = self.resize_and_crop(frame1, targetW, targetH)
+            
+            resized_img2 = self.resize_and_crop(frame2, targetW, targetH)
+
+
+            #concatImage =  self.concat_images(resized_img1,resized_img2)
+            merged = self.createImageWithMask( resized_img1 , resized_img2)
+            
+            frames.append(merged)
+            
+            if pbar:
+                pbar.update(i)
+                      
+            i += 1
+            
+            
+            
+        # Convert to tensor
+        numpy_array = np.array(frames)
+        theTensor = torch.from_numpy(numpy_array)
+        theTensor = theTensor.float()  / 255.0
+        
+        print(theTensor.shape)
+        
+        return (theTensor , audio)
+        
+        
+    def concat_images(self, imga, imgb):
+        """
+        Combines two color image ndarrays side-by-side.
+        """
+        ha,wa = imga.shape[:2]
+        hb,wb = imgb.shape[:2]
+        max_height = np.max([ha, hb])
+        total_width = wa+wb
+        new_img = np.zeros(shape=(max_height, total_width, 3))
+        new_img[:ha,:wa]=imga
+        new_img[:hb,wa:wa+wb]=imgb
+        return new_img
+        
+        
+        
+    def resize_and_crop(self, img, w, h):
+        """
+        Resizes and crops an image to a specific size.
+        """
+
+        img_cropped_resized = ImageOps.fit(img, (w, h), Image.Resampling.LANCZOS)
+        
+        return  img_cropped_resized
+        
+
+    def loadDiagMask(self, size) :
+        width, height = size
+        mask  = Image.open('mymask2.png').convert("L").resize(size)
+        
+        return mask
+        
+    def createMask(self , size, wedge_color=(0, 0, 255, 128) ):
+        """
+        Creates a black-and-white mask with a semi-random curly border.
+        
+        Args:
+            size (tuple): The (width, height) of the mask.
+            border_width (int): The width of the curly border in pixels.
+            complexity (int): Controls the number of waves in the border.
+
+        Returns:
+            Image: A grayscale ('L') mask image.
+        """
+        width, height = size
+        # Create a diagonal gradient using NumPy
+        diagonal_gradient = np.zeros((height, width), dtype=np.uint8)
+        for y in range(height):
+            for x in range(width-100, width):
+                # The transparency value is based on the diagonal position
+                diagonal_gradient[y, x] = min(255, int((x + y) / (width + height) * 255 * 1.5))
+                
+        # Create the mask from the gradient array
+        mask = Image.fromarray(diagonal_gradient, mode='L')
+        
+              
+
+        return mask
+
+    def createImageWithMask(self, img1, img2, ):
+
+        
+        # Create the curly border mask
+        mask = self.loadDiagMask(img1.size)
+        w,h = img1.size
+
+        diagLocationPerc =363.0/512.0
+        moveX  = int( diagLocationPerc * float(w))
+        blockWidth = w - moveX
+        
+        # move img2 --> right
+        moveImg = img2.copy()
+        
+        box = (0, 0, blockWidth, h)  
+        cropped_region = img2.crop(box)
+        moveImg.paste(cropped_region, ( moveX,0))
+
+
+        # Composite the images using the mask
+        # The mask controls which image is visible.
+        # Image.composite(image1, image2, mask)
+        # White areas (255) of the mask show image1
+        # Black areas (0) of the mask show image2
+        merged_image = Image.composite(img1, moveImg, mask)
+        
+        box = (blockWidth, 0, w, h)  
+        cropped_region = img2.crop(box)
+        
+        new_img = Image.new("RGB", (w * 2 - blockWidth, h), color="white") 
+        new_img.paste(merged_image, (0, 0))
+        new_img.paste(cropped_region, (w , 0) )
+        
+        
+        return new_img

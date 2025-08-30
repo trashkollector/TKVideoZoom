@@ -5,13 +5,14 @@ NODE_CLASS_MAPPINGS = {
     "TKVideoSpeedZones": zoomcontrols.TKVideoSpeedZones,
     "TKVideoSmoothLooper": zoomcontrols.TKVideoSmoothLooper,
     "TKVideoStitcher": zoomcontrols.TKVideoStitcher,
+    "TKVideoFuse": zoomcontrols.TKVideoFuse,
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
 NODE_DISPLAY_NAME_MAPPINGS = {
      "TKVideoZoom": "Video Effects",
      "TKVideoSpeedZones": "Video Speed Adjuster",
-     "TKVideoSmoothLooper": "Loop a video .",
-     "TKVideoStitcher": "Video Stitcher.",
-
+     "TKVideoSmoothLooper": "Loop a video",
+     "TKVideoStitcher": "Video Stitcher",
+     "TKVideoFuse":"Video Fuse",
 }
