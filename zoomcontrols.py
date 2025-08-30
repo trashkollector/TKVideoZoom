@@ -8,7 +8,7 @@ import numpy as np
 import random
 import comfy.utils
 import math
-
+import pathlib
 
 #  TK Collector - Custom Node for Video Zooming
 #  July 31, 2025
@@ -1107,6 +1107,7 @@ class TKVideoFuse :
             targetH = int (targetHeight/2)+ int(gap)
             targetW = int(targetWidth  )   
 
+        mask = self.loadDiagMask((targetW, targetH))
 
         #image = tensor
         
@@ -1147,7 +1148,7 @@ class TKVideoFuse :
 
 
             #concatImage =  self.concat_images(resized_img1,resized_img2)
-            merged = self.createImageWithMask( resized_img1 , resized_img2)
+            merged = self.createImageWithMask( resized_img1 , resized_img2, mask)
             
             frames.append(merged)
             
@@ -1194,12 +1195,19 @@ class TKVideoFuse :
         
 
     def loadDiagMask(self, size) :
-        width, height = size
-        mask  = Image.open('mymask2.png').convert("L").resize(size)
+        # Get the path of the current Python file
+        node_path = pathlib.Path(__file__).resolve()
+        # Get the parent directory (the custom node's folder)
+        node_directory = node_path.parent
+        file_path = node_directory / "assets" / "MaskDiagonal.png"
+        print(file_path)
         
+        width, height = size
+        mask  = Image.open(file_path).convert("L").resize(size)
+        print("Loaded Mask")
         return mask
         
-    def createMask(self , size, wedge_color=(0, 0, 255, 128) ):
+    def createMask(self , size,  ):
         """
         Creates a black-and-white mask with a semi-random curly border.
         
@@ -1226,11 +1234,10 @@ class TKVideoFuse :
 
         return mask
 
-    def createImageWithMask(self, img1, img2, ):
+    def createImageWithMask(self, img1, img2, mask, ):
 
         
-        # Create the curly border mask
-        mask = self.loadDiagMask(img1.size)
+      
         w,h = img1.size
 
         diagLocationPerc =363.0/512.0
@@ -1261,3 +1268,4 @@ class TKVideoFuse :
         
         
         return new_img
+        
