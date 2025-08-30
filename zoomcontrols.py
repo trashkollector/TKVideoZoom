@@ -1072,7 +1072,7 @@ class TKVideoFuse :
 
         return {
             "required": {
-                "fuse_type":  ([ "Effect 1", "Effect 2", "Effect 3", "Effect 4"],),
+                "fuse_type":  ([ "Effect 1", "Effect 2", "Effect 3", "Effect 4","Effect 5"],),
                 "targetWidth": ("INT", {"default": "500"}),
                 "targetHeight": ("INT", {"default": "500"}),
 
@@ -1140,9 +1140,9 @@ class TKVideoFuse :
             frame1 = Image.fromarray(nmp1)
             frame2 = Image.fromarray(nmp2)
             
-            resized_img1 = self.resize_and_crop(frame1, targetW, targetH)
+            resized_img1 = self.resize_and_crop(frame1, targetW, targetH, (0.5,0.0))  # center top
             
-            resized_img2 = self.resize_and_crop(frame2, targetW, targetH)
+            resized_img2 = self.resize_and_crop(frame2, targetW, targetH, (0.5, 0.0))
 
 
             #concatImage =  self.concat_images(resized_img1,resized_img2)
@@ -1182,12 +1182,12 @@ class TKVideoFuse :
         
         
         
-    def resize_and_crop(self, img, w, h):
+    def resize_and_crop(self, img, w, h, centering):
         """
         Resizes and crops an image to a specific size.
         """
 
-        img_cropped_resized = ImageOps.fit(img, (w, h), Image.Resampling.LANCZOS)
+        img_cropped_resized = ImageOps.fit(img, (w, h), Image.Resampling.LANCZOS, 0.0, centering)
         
         return  img_cropped_resized
         
@@ -1203,9 +1203,11 @@ class TKVideoFuse :
             file_path = node_directory / "assets" / "Mask02.png"
         elif (fuse_type =="Effect 3"):
             file_path = node_directory / "assets" / "Mask03.png"
-        else:
+        elif (fuse_type =="Effect 4"):
             file_path = node_directory / "assets" / "Mask04.png"
-            
+        elif (fuse_type =="Effect 5"):
+            file_path = node_directory / "assets" / "Mask05.png"   
+
         print(file_path)
         
         width, height = size
