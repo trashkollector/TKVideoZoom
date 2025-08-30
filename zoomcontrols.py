@@ -1072,7 +1072,7 @@ class TKVideoFuse :
 
         return {
             "required": {
-                "orientation":  (["landscape","portrait"],),
+                "fuse_type":  ([ "Effect 1", "Effect 2", "Effect 3", "Effect 4"],),
                 "targetWidth": ("INT", {"default": "500"}),
                 "targetHeight": ("INT", {"default": "500"}),
 
@@ -1098,16 +1098,14 @@ class TKVideoFuse :
     CATEGORY = "TKVideoZoom"
 
     
-    def tkvideofuse(self, orientation, targetWidth, targetHeight,  image1, image2, audio=None):
+    def tkvideofuse(self, fuse_type, targetWidth, targetHeight,  image1, image2, audio=None):
         gap  = 100
-        if orientation == "landscape" :
-            targetW = int ((targetWidth/2)+int(gap))
-            targetH = int(targetHeight)
-        else :
-            targetH = int (targetHeight/2)+ int(gap)
-            targetW = int(targetWidth  )   
 
-        mask = self.loadDiagMask((targetW, targetH))
+        targetW = int ((targetWidth/2)+int(gap))
+        targetH = int(targetHeight)
+
+
+        mask = self.loadDiagMask( fuse_type, (targetW, targetH))
 
         #image = tensor
         
@@ -1194,12 +1192,20 @@ class TKVideoFuse :
         return  img_cropped_resized
         
 
-    def loadDiagMask(self, size) :
+    def loadDiagMask(self, fuse_type, size) :
         # Get the path of the current Python file
         node_path = pathlib.Path(__file__).resolve()
         # Get the parent directory (the custom node's folder)
         node_directory = node_path.parent
-        file_path = node_directory / "assets" / "MaskDiagonal.png"
+        if fuse_type =="Effect 1":
+            file_path = node_directory / "assets" / "Mask01.png"
+        elif (fuse_type =="Effect 2"):
+            file_path = node_directory / "assets" / "Mask02.png"
+        elif (fuse_type =="Effect 3"):
+            file_path = node_directory / "assets" / "Mask03.png"
+        else:
+            file_path = node_directory / "assets" / "Mask04.png"
+            
         print(file_path)
         
         width, height = size
@@ -1268,4 +1274,3 @@ class TKVideoFuse :
         
         
         return new_img
-        
