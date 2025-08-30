@@ -14,8 +14,10 @@ Loop a video, so it appears more seamless when it is being looped.
 Take 2 Videos and fuse them together into 1 video.
 
 
-Cutom Nodes for COMFY UI
 
+
+
+Cutom Nodes for COMFY UI
 
 https://civitai.com/models/1821164/video-zoom-in-zoom-out-slide-wobble-effects-for-existing-video
 
@@ -24,6 +26,7 @@ https://civitai.com/models/1821164/video-zoom-in-zoom-out-slide-wobble-effects-f
 [![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/6uyFjAo0Sk8/maxresdefault.jpg)](https://www.youtube.com/watch?v=6uyFjAo0Sk8)
 
 
+These nodes can be installed diretly from ComfyUI
 
 for manual install
 ---------------------
