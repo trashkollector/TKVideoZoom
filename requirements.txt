@@ -1,3 +1,11 @@
-opencv-python>=4.5.5.62
-numpy
-
+comfy==0.0.1
+nodes==1.2
+numpy==2.3.2
+opencv_contrib_python==4.11.0.86
+opencv_python==4.10.0.84
+opencv_python_headless==4.11.0.86
+Pillow==11.3.0
+torch==2.7.1+cu126
+torch==2.7.0+cu126
+torchvision==0.22.1+cu126
+torchvision==0.22.0+cu126
