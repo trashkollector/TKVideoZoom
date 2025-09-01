@@ -1,16 +1,16 @@
-# TKVideoZoom   
+# TKVideoZoom   (Video Effects)
 Apply various effects to existing video, ZOOM IN , ZOOM OUT, SPIN, SLIDE, etc
+
+https://github.com/user-attachments/assets/bbe03b7c-ff1f-458c-85d8-b5e6f2a66328
 
 # TKVideoStitcher   
 Stitch together (concatenate) videos.   Transition effects included
 
-
 https://github.com/user-attachments/assets/746ffd4f-2ad9-4d75-8730-34333f688be7
-
-
 
 # TKVideoSpeedZones  
 Change the speed of various parts of video to create more dynamic movmement.
+
 
 # TKVideoSmoothLooper
 Loop a video, so it appears more seamless when it is being looped.
