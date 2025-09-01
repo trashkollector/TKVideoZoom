@@ -4,6 +4,7 @@ Nodes for ComfyUI - You can find these Nodes in the Comfy Manager.
 Apply various effects to existing video, ZOOM IN , ZOOM OUT, SPIN, SLIDE, CAMERA SHAKE, WOBBLE, etc
 
 https://github.com/user-attachments/assets/fbaa8ca0-8a0e-43e8-9dcf-1039b77dcb5d
+
 https://github.com/user-attachments/assets/cd6a01ec-672c-4a57-bb9a-1f440b2dff95
 
 
