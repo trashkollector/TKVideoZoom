@@ -4,7 +4,7 @@ Apply various effects to existing video, ZOOM IN , ZOOM OUT, SPIN, SLIDE, etc
 # TKVideoStitcher   
 Stitch together (concatenate) videos.   Transition effects included
 
-[![Watch the video](https://github.com/trashkollector/TKVideoZoom/tree/main/assets/stitch/stitcher.png)](https://github.com/trashkollector/TKVideoZoom/tree/main/assets/stitch.mp4)
+[![Watch the video](https://github.com/trashkollector/TKVideoZoom/blob/main/assets/stitch/stitcher.png)](https://github.com/trashkollector/TKVideoZoom/blob/main/assets/stitch.mp4)
 
 # TKVideoSpeedZones  
 Change the speed of various parts of video to create more dynamic movmement.
